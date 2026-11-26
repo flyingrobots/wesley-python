@@ -18,11 +18,15 @@ jobs:
         python-version: ["3.9", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install development tools
-        run: python -m pip install -r requirements-dev.txt
+      # actions/setup-python has no Python 3.9 build for the current Ubuntu runner, so uv provides
+      # the interpreter (a python-build-standalone build) in a virtual environment for every version.
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Python and the development tools
+        run: |
+          uv venv --python ${{ matrix.python-version }} --seed "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install -r requirements-dev.txt
+          "$RUNNER_TEMP/venv/bin/python" --version
       - name: Lint
         run: |
           python -m ruff check .
