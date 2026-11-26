@@ -1,0 +1,121 @@
+{
+  "version": "1.0.0",
+  "types": [
+    {
+      "name": "Json",
+      "kind": "SCALAR",
+      "directives": {}
+    },
+    {
+      "name": "Phase",
+      "kind": "ENUM",
+      "description": "Where a run is.",
+      "directives": {"wire": {"name": "phase"}},
+      "enumValues": ["START", "END"]
+    },
+    {
+      "name": "Window",
+      "kind": "OBJECT",
+      "description": "A half-open range of line numbers.",
+      "directives": {},
+      "fields": [
+        {
+          "name": "from",
+          "description": "The first line, inclusive.",
+          "type": {"base": "Int", "nullable": false, "isList": false},
+          "directives": {}
+        },
+        {
+          "name": "to",
+          "type": {"base": "Int", "nullable": true, "isList": false},
+          "directives": {"optional": true}
+        }
+      ]
+    },
+    {
+      "name": "Report",
+      "kind": "OBJECT",
+      "description": "Everything a run reports.\n\nIt spans two paragraphs.",
+      "directives": {"wes_table": {"name": "reports"}},
+      "fields": [
+        {
+          "name": "id",
+          "type": {"base": "ID", "nullable": false, "isList": false},
+          "directives": {}
+        },
+        {
+          "name": "phase",
+          "type": {"base": "Phase", "nullable": false, "isList": false},
+          "directives": {}
+        },
+        {
+          "name": "window",
+          "description": "The lines the report covers.",
+          "type": {"base": "Window", "nullable": true, "isList": false},
+          "directives": {}
+        },
+        {
+          "name": "in",
+          "type": {"base": "String", "nullable": false, "isList": true, "listItemNullable": false},
+          "directives": {}
+        },
+        {
+          "name": "class",
+          "type": {"base": "Float", "nullable": true, "isList": true, "listItemNullable": true},
+          "directives": {}
+        },
+        {
+          "name": "flags",
+          "type": {"base": "Boolean", "nullable": false, "isList": true},
+          "directives": {}
+        },
+        {
+          "name": "extra",
+          "type": {"base": "Json", "nullable": true, "isList": false},
+          "directives": {}
+        },
+        {
+          "name": "children",
+          "type": {"base": "Report", "nullable": false, "isList": true, "listItemNullable": false},
+          "directives": {}
+        },
+        {
+          "name": "related",
+          "type": {"base": "Item", "nullable": true, "isList": false},
+          "directives": {}
+        }
+      ]
+    },
+    {
+      "name": "Note",
+      "kind": "OBJECT",
+      "directives": {},
+      "fields": [
+        {
+          "name": "text",
+          "type": {"base": "String", "nullable": false, "isList": false},
+          "directives": {}
+        }
+      ]
+    },
+    {
+      "name": "ReportFilter",
+      "kind": "INPUT_OBJECT",
+      "directives": {},
+      "fields": [
+        {
+          "name": "phase",
+          "type": {"base": "Phase", "nullable": true, "isList": false},
+          "directives": {}
+        }
+      ]
+    },
+    {
+      "name": "Item",
+      "kind": "UNION",
+      "description": "Either a report or a note.",
+      "directives": {},
+      "unionMembers": ["Report", "Note"]
+    }
+  ]
+}

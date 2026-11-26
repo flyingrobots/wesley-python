@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wesley-python"
+version = "0.1.0"
+description = "A generic Wesley target that emits standard-library Python TypedDicts from Wesley IR."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+dependencies = []
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/flyingrobots/wesley-python"
+
+[project.scripts]
+wesley-python = "wesley_python.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wesley_python = ["py.typed"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+# Goldens are generated output in the Python 3.9 typing style, and the type-check fixtures are
+# deliberately wrong. Both are checked by py_compile and mypy in the test suite instead.
+extend-exclude = ["tests/golden", "tests/typecheck"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # The formatter owns these; ruff documents them as conflicting with `ruff format`.
+    "COM812",
+    "ISC001",
+    # D203 and D211 conflict, as do D212 and D213; keep D211 and D212.
+    "D203",
+    "D213",
+    # Docstrings name their parameters in prose; a Sphinx or Google section per argument is noise.
+    "D417",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `wesley_python.types` is the public API's name for the type expressions; it shadows the standard
+# library `types` module only inside the package namespace, which absolute imports make harmless.
+"src/wesley_python/types.py" = ["A005"]
+"tests/**" = [
+    # The suite is stdlib `unittest` by choice (no runtime or test dependencies beyond the pinned
+    # tools), so unittest-style assertions are the idiom rather than bare `assert`.
+    "PT009",
+    "PT027",
+    # Test classes and methods are named for what they check; docstrings on each would repeat it.
+    "D101",
+    "D102",
+]
+
+
+[tool.mypy]
+strict = true
+python_version = "3.9"
+files = ["src", "tests"]
+exclude = ["^tests/golden/", "^tests/typecheck/"]
+mypy_path = "src"
+warn_unreachable = true
