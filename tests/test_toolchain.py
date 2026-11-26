@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import py_compile
 import runpy
 import shutil
@@ -13,7 +14,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.support import GOLDEN, TYPECHECK
+from tests.support import FIXTURES, GOLDEN, TYPECHECK
+from wesley_python import syntax
+from wesley_python.emit import module_from_ir
 
 # Each fixture that must fail, with the mypy error code it must fail with.
 EXPECTED_FAILURES = {
@@ -22,6 +25,7 @@ EXPECTED_FAILURES = {
     "bad_missing_required.py": "typeddict-item",
     "bad_null_field.py": "typeddict-item",
     "bad_nullable_omitted.py": "typeddict-item",
+    "bad_alias_value.py": "typeddict-item",
 }
 
 
@@ -88,6 +92,18 @@ class GoldenToolchainTest(unittest.TestCase):
         )
 
 
+class LiveOutputMypyTest(unittest.TestCase):
+    """mypy --strict over what the emitter writes now, not only over the stored goldens."""
+
+    def test_every_emitted_alias_is_usable_as_a_type(self) -> None:
+        ir = json.loads((FIXTURES / "unions.ir.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "models.py").write_bytes(syntax.render(module_from_ir(ir)).encode("utf-8"))
+            shutil.copy(TYPECHECK / "live" / "uses_models.py", workdir / "uses_models.py")
+            self.assertEqual(_run_mypy(workdir), [])
+
+
 class MypyTest(unittest.TestCase):
     """mypy --strict, for Python 3.9, over the goldens and the fixtures that use them."""
 
@@ -105,7 +121,7 @@ class MypyTest(unittest.TestCase):
         return [line for line in self.errors if line.startswith(f"{name}:")]
 
     def test_goldens_and_good_uses_are_clean(self) -> None:
-        clean = [path.name for path in _goldens()] + ["uses_goldens.py"]
+        clean = [path.name for path in _goldens()] + ["uses_goldens.py", "uses_aliases.py"]
         for name in clean:
             with self.subTest(file=name):
                 self.assertEqual(self._errors_in(name), [])

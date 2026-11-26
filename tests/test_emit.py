@@ -20,6 +20,7 @@ GOLDEN_CASES = {
     "hello.ir.json": "emit_hello.py",
     "plain.ir.json": "emit_plain.py",
     "extensions.ir.json": "emit_extensions.py",
+    "unions.ir.json": "emit_unions.py",
 }
 
 
@@ -124,6 +125,22 @@ class MappingTest(unittest.TestCase):
         )
         self.assertEqual(self._render(plain), self._render(decorated))
 
+    def test_a_union_follows_its_members_and_other_types_keep_ir_order(self) -> None:
+        union: dict[str, object] = {"name": "U", "kind": "UNION", "directives": {}, "unionMembers": ["B", "D"]}
+        enum: dict[str, object] = {"name": "E", "kind": "ENUM", "directives": {}, "enumValues": ["X"]}
+        module = module_from_ir(
+            _ir(union, _object("A"), _object("B"), enum, _object("C"), _object("D"), _object("F")),
+        )
+        self.assertEqual(
+            [definition.name for definition in module.definitions],
+            ["A", "B", "E", "C", "D", "U", "F"],
+        )
+
+    def test_a_single_member_union_before_its_member_is_a_plain_alias(self) -> None:
+        union: dict[str, object] = {"name": "U", "kind": "UNION", "directives": {}, "unionMembers": ["A"]}
+        text = self._render(_ir(union, _object("A", _field("a", "Int"))))
+        self.assertTrue(text.endswith("\nU = A\n"), text)
+
 
 class InvalidIRTest(unittest.TestCase):
     def test_other_ir_versions_are_refused(self) -> None:
@@ -140,6 +157,13 @@ class InvalidIRTest(unittest.TestCase):
             (_ir(_object("T", _field("a", "Int", nullable="no"))), r"nullable"),
             (_ir({"name": "E", "kind": "ENUM", "directives": {}, "enumValues": []}), "enumValues"),
             (_ir({"name": "class", "kind": "OBJECT", "directives": {}, "fields": []}), "class"),
+            (
+                _ir(
+                    {"name": "U", "kind": "UNION", "directives": {}, "unionMembers": ["V"]},
+                    {"name": "V", "kind": "UNION", "directives": {}, "unionMembers": ["U"]},
+                ),
+                "cycle.*U.*V",
+            ),
         ]
         for ir, pattern in cases:
             with self.subTest(pattern=pattern), self.assertRaisesRegex(ValueError, pattern):

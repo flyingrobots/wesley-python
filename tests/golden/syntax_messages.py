@@ -27,6 +27,8 @@ class RunEnd(_RunEndRequired, _RunEndOptional):
     next: A later step.
         Defined below.
     """
+MaybeStep = Union['Step', None]
+'A forward reference in a subscript.'
 _StepRequired = TypedDict('_StepRequired', {'name': str, 'children': List['Step']})
 _StepOptional = TypedDict('_StepOptional', {'flag': Literal[1, True]}, total=False)
 

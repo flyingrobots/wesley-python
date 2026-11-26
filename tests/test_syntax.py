@@ -108,6 +108,29 @@ class TypeExpressionTest(unittest.TestCase):
     def test_ref_to_a_name_outside_the_module_is_a_plain_name(self) -> None:
         self.assertEqual(_expr(Ref("Elsewhere")), "Elsewhere")
 
+    def test_an_alias_of_a_bare_reference_to_a_later_definition_is_refused(self) -> None:
+        # ``Result = 'Item'`` would be a str variable to mypy, not a type alias.
+        later = syntax.TypedDictDef("Item", [syntax.Field("name", Str(), required=True)])
+        for type_ in (Ref("Item"), UnionOf(Ref("Item")), UnionOf(UnionOf(Ref("Item")))):
+            with self.subTest(type=type_):
+                module = syntax.Module([syntax.AliasDef("Result", type_), later])
+                with self.assertRaisesRegex(ValueError, r"Result.*Item"):
+                    syntax.render(module)
+
+    def test_an_alias_may_reference_a_later_definition_inside_a_subscript(self) -> None:
+        later = syntax.TypedDictDef("Item", [syntax.Field("name", Str(), required=True)])
+        module = syntax.Module(
+            [
+                syntax.AliasDef("Items", ListOf(Ref("Item"))),
+                syntax.AliasDef("MaybeItem", UnionOf(Ref("Item"), NoneType())),
+                later,
+                syntax.AliasDef("Result", Ref("Item")),
+            ],
+        )
+        body = [node for node in syntax.to_ast(module).body if isinstance(node, ast.Assign)]
+        aliases = [ast.unparse(node) for node in body if not isinstance(node.value, ast.Call)]
+        self.assertEqual(aliases, ["Items = List['Item']", "MaybeItem = Union['Item', None]", "Result = Item"])
+
 
 class DefinitionTest(unittest.TestCase):
     def test_definition_names_must_be_identifiers(self) -> None:

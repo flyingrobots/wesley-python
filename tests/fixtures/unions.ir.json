@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "types": [
+    {
+      "name": "Result",
+      "kind": "UNION",
+      "description": "A union of one member, declared before it.",
+      "directives": {},
+      "unionMembers": ["Item"]
+    },
+    {
+      "name": "Either",
+      "kind": "UNION",
+      "directives": {},
+      "unionMembers": ["Item", "Other"]
+    },
+    {
+      "name": "Holder",
+      "kind": "OBJECT",
+      "directives": {},
+      "fields": [
+        {
+          "name": "result",
+          "type": {"base": "Result", "nullable": false, "isList": false},
+          "directives": {}
+        },
+        {
+          "name": "either",
+          "type": {"base": "Either", "nullable": true, "isList": true, "listItemNullable": false},
+          "directives": {}
+        }
+      ]
+    },
+    {
+      "name": "Item",
+      "kind": "OBJECT",
+      "directives": {},
+      "fields": [
+        {
+          "name": "name",
+          "type": {"base": "String", "nullable": false, "isList": false},
+          "directives": {}
+        }
+      ]
+    },
+    {
+      "name": "Other",
+      "kind": "OBJECT",
+      "directives": {},
+      "fields": [
+        {
+          "name": "count",
+          "type": {"base": "Int", "nullable": false, "isList": false},
+          "directives": {}
+        }
+      ]
+    }
+  ]
+}

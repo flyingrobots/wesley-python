@@ -86,6 +86,7 @@ def messages_module() -> syntax.Module:
                 ],
                 doc="The last line of a run.\n\nIt closes the run.",
             ),
+            syntax.AliasDef("MaybeStep", UnionOf(Ref("Step"), NoneType()), doc="A forward reference in a subscript."),
             syntax.TypedDictDef(
                 "Step",
                 [
