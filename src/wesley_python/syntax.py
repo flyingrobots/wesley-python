@@ -12,7 +12,9 @@ keys are each a functional-form ``TypedDict`` (the second one ``total=False``), 
 the definition inherits from both, carrying the docstring. A side with no keys is left out.
 
 Definitions are emitted in the given order; the caller orders them. A reference to a definition
-that comes later in the module is printed as a string forward reference, so the module imports.
+that comes later in the module is printed as a string forward reference, so the module imports. An
+alias whose whole type is such a reference is refused, because a type checker reads ``A = 'B'`` as
+a string, not an alias; define the referenced type first.
 """
 
 from __future__ import annotations
@@ -148,9 +150,21 @@ class AliasDef:
         return [self.name]
 
     def statements(self, context: RenderContext) -> list[ast.stmt]:
-        """Build the assignment and its doc."""
+        """Build the assignment and its doc.
+
+        Raises ``ValueError`` when the whole type is a reference to a definition that comes later:
+        ``Name = 'Later'`` would bind a string, which a type checker does not read as an alias, and
+        Python 3.9 has no ``typing.TypeAlias`` to say otherwise. A forward reference inside a
+        subscript, such as ``List['Later']``, is a type expression and stays allowed.
+        """
+        value = self.type.to_ast(context)
+        # Only a forward reference renders as a bare string: a Literal's string sits in a subscript.
+        forward = _bare_string(value)
+        if forward is not None:
+            msg = f"alias {self.name} is a bare reference to {forward}, which is defined later; define {forward} first"
+            raise ValueError(msg)
         target = ast.Name(id=self.name, ctx=ast.Store())
-        statements: list[ast.stmt] = [ast.Assign(targets=[target], value=self.type.to_ast(context))]
+        statements: list[ast.stmt] = [ast.Assign(targets=[target], value=value)]
         if self.doc is not None:
             statements.append(_string_statement(self.doc))
         return statements
@@ -175,6 +189,13 @@ class Module:
             )
         _check_doc(self.doc)
         object.__setattr__(self, "definitions", definitions)
+
+
+def _bare_string(value: ast.expr) -> str | None:
+    """Return the string if ``value`` is a bare string constant, else ``None``."""
+    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return value.value
+    return None
 
 
 def _string_statement(text: str) -> ast.Expr:

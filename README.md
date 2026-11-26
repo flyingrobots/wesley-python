@@ -33,7 +33,7 @@ The emitter is generic: it ignores every directive. It maps GraphQL as follows.
 | `String`, `ID`, `Int`, `Float`, `Boolean` | `str`, `str`, `int`, `float`, `bool` |
 | any other scalar | `Any` |
 
-Types are written in IR order. A reference to a type written later in the module is a string forward reference, so the module imports.
+Types are written in IR order, except that a union alias moves to just after the last of its members: a type checker reads `A = 'B'` as a string, not as an alias, and Python 3.9 has no `typing.TypeAlias`. A reference to a type written later, inside a field or a subscript such as `List['B']`, is a string forward reference, so the module imports.
 
 ### The syntax API
 
@@ -89,7 +89,7 @@ class End(_EndRequired, _EndOptional):
 
 How a `TypedDict` is written: `typing.NotRequired` is new in Python 3.11, and the class syntax cannot name a key such as `from`. So the required keys and the optional keys are each a functional-form `TypedDict`, the optional one `total=False`, and the class inherits from both; a side with no keys is left out, and a definition with no keys inherits from `TypedDict`. `ast.unparse` cannot print comments, so field docs go into the class docstring as a `name: doc` list, and an alias's doc is a string statement after it. The `from typing import ...` line names exactly the names used, sorted.
 
-The caller orders the definitions; `render` keeps the given order. A definition name must be a Python identifier; two definitions may not bind the same name (including the `_NameRequired` and `_NameOptional` helpers), and a definition may not shadow a `typing` or builtin name the module uses. These are `ValueError`s.
+The caller orders the definitions; `render` keeps the given order. A reference to a later definition is a string forward reference, which is allowed inside a field type or a subscript but not as the whole type of an alias: `AliasDef('Result', Ref('Item'))` before `Item` is a `ValueError` naming both. A definition name must be a Python identifier; two definitions may not bind the same name (including the `_NameRequired` and `_NameOptional` helpers), and a definition may not shadow a `typing` or builtin name the module uses. These are `ValueError`s.
 
 ## Development
 

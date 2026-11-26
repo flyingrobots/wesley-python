@@ -8,7 +8,6 @@ _NodeRequired = TypedDict('_NodeRequired', {'id': str})
 
 class Node(_NodeRequired):
     pass
-SearchResult = Union['User', 'Team']
 Status = Literal['ACTIVE', 'ARCHIVED']
 _TeamRequired = TypedDict('_TeamRequired', {'id': str, 'name': str})
 
@@ -22,6 +21,7 @@ _UserRequired = TypedDict('_UserRequired', {'id': str, 'name': str, 'created_at'
 
 class User(_UserRequired):
     pass
+SearchResult = Union[User, Team]
 _UserFilterRequired = TypedDict('_UserFilterRequired', {'ids': List[str], 'status': Union[Status, None]})
 
 class UserFilter(_UserFilterRequired):
