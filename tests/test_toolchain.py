@@ -1,3 +1,5 @@
+# Copyright 2026 Captain James
+# SPDX-License-Identifier: Apache-2.0
 """Every golden module is checked by the real toolchain: compiled, imported and type-checked."""
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ EXPECTED_FAILURES = {
     "bad_event.py": "typeddict-item",
     "bad_keyword_key.py": "assignment",
     "bad_missing_required.py": "typeddict-item",
-    "bad_null_field.py": "dict-item",
+    "bad_null_field.py": "typeddict-item",
     "bad_nullable_omitted.py": "typeddict-item",
 }
 

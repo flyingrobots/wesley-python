@@ -1,0 +1,42 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install development tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Lint
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+      - name: Type-check
+        run: python -m mypy
+      - name: Test
+        env:
+          PYTHONPATH: src
+        run: python -W error -m unittest discover -s tests -t . -v
+      - name: Install the package and run the command line
+        run: |
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          python -m wesley_python emit --ir "$GITHUB_WORKSPACE/tests/fixtures/hello.ir.json" > hello.py
+          cmp hello.py "$GITHUB_WORKSPACE/tests/golden/emit_hello.py"
+          wesley-python emit --ir "$GITHUB_WORKSPACE/tests/fixtures/plain.ir.json" | cmp - "$GITHUB_WORKSPACE/tests/golden/emit_plain.py"

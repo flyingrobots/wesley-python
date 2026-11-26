@@ -1,0 +1,7 @@
+#!/bin/sh
+# The test suite must pass before a push.
+# Enable with: git config --local core.hooksPath scripts/hooks
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+if [ -x .venv/bin/python ]; then PYTHON=.venv/bin/python; else PYTHON=python3; fi
+PYTHONPATH=src "$PYTHON" -W error -m unittest discover -s tests -t .

@@ -1,10 +1,12 @@
+# Copyright 2026 Captain James
+# SPDX-License-Identifier: Apache-2.0
 """Shared helpers for the test suite: paths, golden files and the example modules."""
 
 from __future__ import annotations
 
 import os
-import unittest
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from wesley_python import syntax
 from wesley_python.types import (
@@ -21,6 +23,9 @@ from wesley_python.types import (
     UnionOf,
 )
 
+if TYPE_CHECKING:
+    import unittest
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 TESTS = ROOT / "tests"
@@ -35,14 +40,14 @@ def assert_golden(case: unittest.TestCase, name: str, actual: str) -> None:
     """Compare ``actual`` to ``tests/golden/<name>``; rewrite it when asked to by the environment."""
     path = GOLDEN / name
     if os.environ.get(UPDATE_ENV) == "1":
-        path.write_text(actual, encoding="utf-8", newline="\n")
+        path.write_bytes(actual.encode("utf-8"))
     case.assertTrue(path.is_file(), f"missing golden {path}; run with {UPDATE_ENV}=1")
     expected = path.read_text(encoding="utf-8")
     case.assertEqual(expected, actual, f"output differs from golden {path}")
 
 
 def messages_module() -> syntax.Module:
-    """A Parley-shaped module: keyword keys, optional keys, literals, nested refs, lists, docs."""
+    """Build a Parley-shaped module: keyword keys, optional keys, literals, nested refs, lists, docs."""
     return syntax.Module(
         [
             syntax.AliasDef(
@@ -86,7 +91,7 @@ def messages_module() -> syntax.Module:
                 [
                     syntax.Field("name", Str(), required=True),
                     syntax.Field("children", ListOf(Ref("Step")), required=True),
-                    syntax.Field("flag", UnionOf(Literal(1), Literal(True)), required=False),
+                    syntax.Field("flag", UnionOf(Literal(1), Literal(value=True)), required=False),
                 ],
             ),
             syntax.AliasDef("Message", UnionOf(Ref("RunEnd"), Ref("Step"))),
@@ -96,7 +101,7 @@ def messages_module() -> syntax.Module:
 
 
 def minimal_module() -> syntax.Module:
-    """Edge shapes: no fields, only optional keys, only required keys, no docs at all."""
+    """Build edge shapes: no fields, only optional keys, only required keys, no docs at all."""
     return syntax.Module(
         [
             syntax.TypedDictDef("Empty", []),

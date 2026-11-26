@@ -1,0 +1,9 @@
+#!/bin/sh
+# Lint, format and type checks must pass before a commit.
+# Enable with: git config --local core.hooksPath scripts/hooks
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+if [ -x .venv/bin/python ]; then PYTHON=.venv/bin/python; else PYTHON=python3; fi
+"$PYTHON" -m ruff check .
+"$PYTHON" -m ruff format --check .
+"$PYTHON" -m mypy

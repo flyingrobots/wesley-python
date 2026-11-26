@@ -1,3 +1,5 @@
+# Copyright 2026 Captain James
+# SPDX-License-Identifier: Apache-2.0
 """The plain-GraphQL emitter and its command line."""
 
 from __future__ import annotations
@@ -96,13 +98,12 @@ class MappingTest(unittest.TestCase):
             ),
         )
         self.assertIn(
-            "{'a': List[int], 'b': List[Union[int, None]], 'c': List[Union[int, None]], "
-            "'d': Union[List[int], None]}",
+            "{'a': List[int], 'b': List[Union[int, None]], 'c': List[Union[int, None]], 'd': Union[List[int], None]}",
             text,
         )
 
     def test_enum_is_a_literal_alias(self) -> None:
-        enum = {"name": "E", "kind": "ENUM", "directives": {}, "enumValues": ["A", "B"]}
+        enum: dict[str, object] = {"name": "E", "kind": "ENUM", "directives": {}, "enumValues": ["A", "B"]}
         self.assertIn("E = Literal['A', 'B']", self._render(_ir(enum)))
 
     def test_directives_are_ignored(self) -> None:

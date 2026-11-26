@@ -1,3 +1,5 @@
+# Copyright 2026 Captain James
+# SPDX-License-Identifier: Apache-2.0
 """Repository rules checked over the package source: stdlib only, and no code built from strings."""
 
 from __future__ import annotations
@@ -46,9 +48,11 @@ class StandardLibraryOnlyTest(unittest.TestCase):
             with self.subTest(file=name):
                 self.assertLessEqual(_imported_modules(tree) - {PACKAGE}, ALLOWED_IMPORTS)
 
-    @unittest.skipIf(sys.version_info < (3, 10), "sys.stdlib_module_names is new in Python 3.10")
     def test_the_allowed_imports_are_standard_library_modules(self) -> None:
-        self.assertLessEqual(ALLOWED_IMPORTS, frozenset(sys.stdlib_module_names))
+        if sys.version_info < (3, 10):
+            self.skipTest("sys.stdlib_module_names is new in Python 3.10")
+        else:
+            self.assertLessEqual(ALLOWED_IMPORTS, frozenset(sys.stdlib_module_names))
 
 
 class NoTemplatingTest(unittest.TestCase):
@@ -62,7 +66,9 @@ class NoTemplatingTest(unittest.TestCase):
 
     def test_the_guard_catches_a_template(self) -> None:
         tree = ast.parse("CODE = 'class End(_EndRequired):'\nOTHER = \"X = TypedDict('X', {})\"")
-        constants = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant)]
+        constants = [
+            node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        ]
         hits = [c for c in constants if any(p.search(c) for p in TEMPLATE_PATTERNS)]
         self.assertEqual(len(hits), 2)
 

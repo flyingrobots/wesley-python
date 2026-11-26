@@ -1,3 +1,5 @@
+# Copyright 2026 Captain James
+# SPDX-License-Identifier: Apache-2.0
 """The syntax API: types and definitions become an ``ast`` tree printed by ``ast.unparse``."""
 
 from __future__ import annotations
@@ -71,7 +73,7 @@ class TypeExpressionTest(unittest.TestCase):
         self.assertEqual(_expr(UnionOf(Int())), "int")
 
     def test_union_of_literals_merges_into_one_literal(self) -> None:
-        self.assertEqual(_expr(UnionOf(Literal("a"), Literal(2), Literal(False))), "Literal['a', 2, False]")
+        self.assertEqual(_expr(UnionOf(Literal("a"), Literal(2), Literal(value=False))), "Literal['a', 2, False]")
 
     def test_union_with_none(self) -> None:
         self.assertEqual(_expr(UnionOf(Str(), NoneType())), "Union[str, None]")
@@ -85,7 +87,7 @@ class TypeExpressionTest(unittest.TestCase):
             Literal(1.5)  # type: ignore[arg-type]
 
     def test_literal_escapes_through_the_printer(self) -> None:
-        self.assertEqual(_expr(Literal("it's \"q\"\n")), "Literal['it\\'s \"q\"\\n']")
+        self.assertEqual(_expr(Literal('it\'s "q"\n')), "Literal['it\\'s \"q\"\\n']")
 
     def test_ref_refuses_a_non_identifier(self) -> None:
         for bad in ("from", "a-b", "", "1a"):
