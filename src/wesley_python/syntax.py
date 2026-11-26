@@ -156,8 +156,13 @@ class AliasDef:
         ``Name = 'Later'`` would bind a string, which a type checker does not read as an alias, and
         Python 3.9 has no ``typing.TypeAlias`` to say otherwise. A forward reference inside a
         subscript, such as ``List['Later']``, is a type expression and stays allowed.
+
+        A whole type of ``None`` is written ``Literal[None]``: ``Name = None`` would bind the value
+        ``None``, not an alias, and ``Literal[None]`` means the same type (PEP 586).
         """
         value = self.type.to_ast(context)
+        if isinstance(value, ast.Constant) and value.value is None:
+            value = ast.Subscript(value=context.typing_name("Literal"), slice=value, ctx=ast.Load())
         # Only a forward reference renders as a bare string: a Literal's string sits in a subscript.
         forward = _bare_string(value)
         if forward is not None:
