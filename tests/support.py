@@ -110,5 +110,7 @@ def minimal_module() -> syntax.Module:
             syntax.TypedDictDef("OnlyRequired", [syntax.Field("b", Int(), required=True)]),
             syntax.TypedDictDef("Documented", [], doc="Has a docstring and no fields."),
             syntax.AliasDef("Single", UnionOf(Str())),
+            syntax.AliasDef("Null", NoneType()),
+            syntax.AliasDef("AlsoNull", UnionOf(NoneType())),
         ],
     )

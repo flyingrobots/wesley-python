@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.support import FIXTURES, GOLDEN, TYPECHECK
+from tests.support import FIXTURES, GOLDEN, TYPECHECK, minimal_module
 from wesley_python import syntax
 from wesley_python.emit import module_from_ir
 
@@ -26,6 +26,7 @@ EXPECTED_FAILURES = {
     "bad_null_field.py": "typeddict-item",
     "bad_nullable_omitted.py": "typeddict-item",
     "bad_alias_value.py": "typeddict-item",
+    "bad_null_alias.py": "assignment",
 }
 
 
@@ -101,6 +102,13 @@ class LiveOutputMypyTest(unittest.TestCase):
             workdir = Path(tmp)
             (workdir / "models.py").write_bytes(syntax.render(module_from_ir(ir)).encode("utf-8"))
             shutil.copy(TYPECHECK / "live" / "uses_models.py", workdir / "uses_models.py")
+            self.assertEqual(_run_mypy(workdir), [])
+
+    def test_every_alias_the_syntax_api_renders_is_usable_as_a_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "minimal.py").write_bytes(syntax.render(minimal_module()).encode("utf-8"))
+            shutil.copy(TYPECHECK / "live" / "uses_minimal.py", workdir / "uses_minimal.py")
             self.assertEqual(_run_mypy(workdir), [])
 
 

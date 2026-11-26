@@ -10,3 +10,8 @@ item: Item = result
 either: Either = {"count": 2}
 holder: Holder = {"result": result, "either": [either, {"name": "x"}]}
 later: MaybeStep = None
+
+from syntax_minimal import AlsoNull, Null
+
+nothing: Null = None
+also_nothing: AlsoNull = nothing

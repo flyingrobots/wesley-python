@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 class Empty(TypedDict):
     pass
@@ -14,3 +14,5 @@ class OnlyRequired(_OnlyRequiredRequired):
 class Documented(TypedDict):
     """Has a docstring and no fields."""
 Single = str
+Null = Literal[None]
+AlsoNull = Literal[None]

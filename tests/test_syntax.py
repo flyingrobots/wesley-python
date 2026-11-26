@@ -67,7 +67,16 @@ class TypeExpressionTest(unittest.TestCase):
     def test_scalars(self) -> None:
         self.assertEqual(_expr(Str()), "str")
         self.assertEqual(_expr(Int()), "int")
-        self.assertEqual(_expr(NoneType()), "None")
+        td = syntax.TypedDictDef("T", [syntax.Field("a", NoneType(), required=True)])
+        self.assertIn("{'a': None}", syntax.render(syntax.Module([td])))
+
+    def test_an_alias_of_none_is_a_literal_none_type_alias(self) -> None:
+        # ``Null = None`` binds a value; ``Null = Literal[None]`` is a type alias on Python 3.9.
+        for type_ in (NoneType(), UnionOf(NoneType()), UnionOf(UnionOf(NoneType()))):
+            with self.subTest(type=type_):
+                self.assertEqual(_expr(type_), "Literal[None]")
+        text = syntax.render(syntax.Module([syntax.AliasDef("Null", NoneType())]))
+        self.assertEqual(text, "from typing import Literal\nNull = Literal[None]\n")
 
     def test_union_of_one_member_collapses_to_it(self) -> None:
         self.assertEqual(_expr(UnionOf(Int())), "int")
