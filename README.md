@@ -10,7 +10,7 @@ Not started. This repository holds the plan and its rules; the first code waits 
 
 ## Where it comes from
 
-The plan is flyingrobots/wesley#858, transferred here. Its first consumer is Parley's vendorable Python writer (flyingrobots/parley#121).
+The plan is issue #1 (transferred from flyingrobots/wesley#858). Its first consumer is Parley's vendorable Python writer (flyingrobots/parley#121).
 
 ## How it generates code
 
