@@ -6,9 +6,17 @@ Wesley compiles GraphQL SDL into an intermediate representation (IR), and does n
 
 ## Status
 
-A first version (0.1.0, unreleased) exists: the package `wesley_python`, with a syntax API for building Python modules of `TypedDict` classes and type aliases, and a plain-GraphQL emitter on the command line. It reads IR version `1.0.0` as Wesley prints it today; the versioned IR contract is still flyingrobots/wesley#881. There is no `--fragment` mode, no marker-wrapped output and no generated header naming the schema hash yet (#1).
+The first release is 0.1.0a1, a pre-release: the package `wesley_python`, with a syntax API for building Python modules of `TypedDict` classes and type aliases, and a plain-GraphQL emitter on the command line. It reads IR version `1.0.0` as Wesley prints it today; the versioned IR contract is still flyingrobots/wesley#881. There is no `--fragment` mode, no marker-wrapped output and no generated header naming the schema hash yet (#1).
 
 The package runs on Python 3.9 or later and imports nothing outside the standard library. Its generated modules do the same.
+
+## Install
+
+```sh
+pip install wesley-python==0.1.0a1
+```
+
+The package is `wesley-python` on PyPI and `wesley_python` to import. While every release is a pre-release, `pip install wesley-python` needs `--pre` or an exact version.
 
 ## Usage
 
@@ -100,7 +108,9 @@ PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -t .
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy
 ```
 
-`requirements-dev.txt` pins mypy and ruff exactly; they are development tools, not dependencies. The pre-commit hook runs ruff and mypy, and the pre-push hook runs the test suite. CI runs all of it on Python 3.9 and 3.13.
+`requirements-dev.txt` pins mypy, ruff, build and twine exactly; they are development tools, not dependencies. The pre-commit hook runs ruff and mypy, and the pre-push hook runs the test suite. CI runs all of it on Python 3.9 and 3.13. It also builds the sdist and wheel, checks them with `twine check --strict` and for `LICENSE` and `NOTICE`, and installs the wheel into fresh environments to run it (`scripts/check-dist`).
+
+Releases are made by pushing an annotated tag; [RELEASING.md](https://github.com/flyingrobots/wesley-python/blob/main/RELEASING.md) describes the procedure.
 
 The goldens under `tests/golden/` are compared byte for byte, compiled with `py_compile`, imported, and type-checked by `mypy --strict --python-version 3.9` together with the fixtures under `tests/typecheck/`: the good uses must pass and each `bad_*.py` must fail with its expected error (a wrong `event` literal, a keyword key read as the wrong type, a missing required key). To rewrite the goldens after an intended change, run the suite with `WESLEY_PYTHON_UPDATE_GOLDENS=1` and review the diff.
 

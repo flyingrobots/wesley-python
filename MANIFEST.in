@@ -1,0 +1,3 @@
+# The sdist carries the package, its metadata, README, LICENSE and NOTICE. The test suite needs
+# the repository (its fixtures, goldens, scripts and changelog), so it is not shipped.
+prune tests

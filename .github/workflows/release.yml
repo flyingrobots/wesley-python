@@ -1,0 +1,277 @@
+# Release wesley-python to PyPI from an annotated tag on main. RELEASING.md describes the procedure.
+#
+# gate -> publish -> verify -> github-release, each needing the one before. The gate checks the tag
+# and the code and builds the distributions once; every later job uses that artifact. Publishing is
+# PyPI trusted publishing (no token), and waits for approval in the `pypi` environment.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Check the tag and the code, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Refuse a run that is not for a tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::a release runs only for a tag; $GITHUB_REF is a $GITHUB_REF_TYPE"
+            exit 1
+          fi
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse a lightweight tag, a moved tag, or a tag not on main
+        run: |
+          # actions/checkout can leave the tag as a lightweight ref to the commit; fetch it as it is.
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          git fetch --force origin "+refs/heads/main:refs/remotes/origin/main"
+          type=$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")
+          if [ "$type" != tag ]; then
+            echo "::error::${GITHUB_REF_NAME} is a lightweight tag; release only from an annotated tag (git tag -a)"
+            exit 1
+          fi
+          tagged=$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")
+          if [ "$tagged" != "$GITHUB_SHA" ] || [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "::error::${GITHUB_REF_NAME} points at $tagged, but this run checked out $GITHUB_SHA"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$tagged" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} ($tagged) is not an ancestor of origin/main"
+            exit 1
+          fi
+      # actions/setup-python has no Python 3.9 build for the current Ubuntu runner, so uv provides
+      # both interpreters, as in checks.yml.
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Install Python 3.13 and 3.9 and the development tools
+        run: |
+          for version in 3.13 3.9; do
+            uv venv --python "$version" --seed "$RUNNER_TEMP/venv-$version"
+            "$RUNNER_TEMP/venv-$version/bin/python" -m pip install -r requirements-dev.txt
+          done
+          echo "$RUNNER_TEMP/venv-3.13/bin" >> "$GITHUB_PATH"
+      - name: Refuse a tag that does not name the package version, or a version the changelog lacks
+        id: version
+        run: |
+          # Python 3.13, so scripts/release.py reads pyproject.toml with the standard library tomllib.
+          # It maps vX.Y.Z-alpha.N to X.Y.ZaN and requires a non-empty `## [X.Y.ZaN]` changelog section.
+          version=$(python scripts/release.py check "$GITHUB_REF_NAME")
+          python -c 'import sys, tomllib; sys.exit(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"] != sys.argv[1])' "$version"
+          case "$version" in
+            *a* | *b* | *rc*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Releasing wesley-python $version (pre-release: $prerelease) from ${GITHUB_REF_NAME}"
+      - name: Lint
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+      - name: Type-check
+        run: python -m mypy
+      - name: Test on Python 3.13
+        env:
+          PYTHONPATH: src
+        run: python -W error -m unittest discover -s tests -t .
+      - name: Test on Python 3.9
+        env:
+          PYTHONPATH: src
+        run: '"$RUNNER_TEMP/venv-3.9/bin/python" -W error -m unittest discover -s tests -t .'
+      - name: Build the sdist and wheel
+        run: python -m build --outdir "$RUNNER_TEMP/dist" .
+      - name: Check them (twine check --strict, contents), and install the wheel on Python 3.9 and 3.13
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          scripts/check-dist "$RUNNER_TEMP/dist" 3.9 3.13
+          test -f "$RUNNER_TEMP/dist/wesley_python-${VERSION}-py3-none-any.whl"
+          test -f "$RUNNER_TEMP/dist/wesley_python-${VERSION}.tar.gz"
+          (cd "$RUNNER_TEMP/dist" && sha256sum -- *)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/wesley-python/${{ needs.gate.outputs.version }}/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Choose the files PyPI does not have yet
+        id: plan
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          # Decided per file, so a partial upload (one file published, the other not) is completed by
+          # "Re-run failed jobs". A file PyPI has with another SHA-256, or one this build did not make,
+          # stops the release: PyPI never replaces a file. scripts/release.py upload-plan decides.
+          answer="$RUNNER_TEMP/release.json"
+          status=$(curl -s -o "$answer" -w '%{http_code}' "https://pypi.org/pypi/wesley-python/${VERSION}/json")
+          case "$status" in
+            200) set -- "$answer" ;;
+            404) set -- ;;
+            *)
+              echo "::error::PyPI answered HTTP $status for wesley-python ${VERSION}"
+              exit 1
+              ;;
+          esac
+          uv run --no-project --python 3.13 python scripts/release.py upload-plan dist "$@" > "$RUNNER_TEMP/upload.txt"
+          mkdir upload
+          while IFS= read -r name; do
+            cp -- "dist/$name" upload/
+          done < "$RUNNER_TEMP/upload.txt"
+          count=$(wc -l < "$RUNNER_TEMP/upload.txt" | tr -d ' ')
+          if [ "$count" = 0 ]; then
+            echo "::notice::PyPI already has every file of wesley-python ${VERSION}, with the same digests; nothing to upload"
+          else
+            echo "Uploading $count file(s):"
+            cat "$RUNNER_TEMP/upload.txt"
+          fi
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+      - name: Publish by trusted publishing
+        if: steps.plan.outputs.count != '0'
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: upload/
+
+  verify:
+    name: Verify the published version installs
+    needs: [gate, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Wait for PyPI to serve the version
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl -sf -o "$RUNNER_TEMP/release.json" "https://pypi.org/pypi/wesley-python/${VERSION}/json"; then
+              echo "PyPI serves wesley-python ${VERSION} (attempt $attempt)"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::PyPI did not serve wesley-python ${VERSION} within 20 attempts"
+          exit 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Check PyPI has exactly the files the gate built
+        run: |
+          jq -r '.urls[] | "\(.digests.sha256)  \(.filename)"' "$RUNNER_TEMP/release.json" | sort -k 2 > "$RUNNER_TEMP/pypi.sha256"
+          (cd dist && sha256sum -- * | sort -k 2) > "$RUNNER_TEMP/built.sha256"
+          cat "$RUNNER_TEMP/pypi.sha256"
+          if ! diff -u "$RUNNER_TEMP/built.sha256" "$RUNNER_TEMP/pypi.sha256"; then
+            echo "::error::the files on PyPI are not the distributions this run built"
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Install from PyPI into fresh environments and run it
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          cd "$RUNNER_TEMP"
+          for python_version in 3.9 3.13; do
+            venv="$RUNNER_TEMP/verify-$python_version"
+            uv venv --python "$python_version" --seed "$venv"
+            # An exact pin installs a pre-release without --pre. The simple index can lag the JSON API,
+            # so retry a few times.
+            installed=false
+            for attempt in $(seq 1 10); do
+              if "$venv/bin/python" -m pip install --no-cache-dir --only-binary=:all: "wesley-python==${VERSION}"; then
+                installed=true
+                break
+              fi
+              echo "pip install failed (attempt $attempt); retrying"
+              sleep 15
+            done
+            if [ "$installed" != true ]; then
+              echo "::error::could not install wesley-python==${VERSION} on Python $python_version"
+              exit 1
+            fi
+            "$venv/bin/python" -m wesley_python emit --help
+            "$venv/bin/wesley-python" emit --help
+            "$venv/bin/python" -c 'import sys, wesley_python, wesley_python.emit, wesley_python.syntax, wesley_python.types; sys.exit(wesley_python.__version__ != sys.argv[1])' "$VERSION"
+          done
+
+  github-release:
+    name: Create the GitHub release
+    needs: [gate, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Create the release with the changelog section as notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          PRERELEASE: ${{ needs.gate.outputs.prerelease }}
+        run: |
+          uv run --no-project --python 3.13 python scripts/release.py notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+          {
+            echo
+            echo "Published to PyPI: https://pypi.org/project/wesley-python/${VERSION}/"
+          } >> "$RUNNER_TEMP/notes.md"
+          set -- --verify-tag --title "wesley-python ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+          if [ "$PRERELEASE" = true ]; then
+            set -- "$@" --prerelease
+          fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" "$@" dist/*

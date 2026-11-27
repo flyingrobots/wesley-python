@@ -8,4 +8,4 @@ emitter is in :mod:`wesley_python.emit`.
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.1.0a1"

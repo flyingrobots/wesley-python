@@ -1,0 +1,71 @@
+#!/bin/sh
+# Check built distributions before they are released: one wheel and one sdist, twine's strict
+# metadata check, LICENSE and NOTICE in both, py.typed in both, and the wheel installed into a fresh
+# environment for each given Python, where the command line and an import must work.
+#
+# Usage: scripts/check-dist DIST_DIR PYTHON_VERSION...
+# Run from the repository root with a Python that has requirements-dev.txt installed as `python`,
+# and uv on PATH to create the fresh environments.
+set -eu
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: scripts/check-dist DIST_DIR PYTHON_VERSION..." >&2
+  exit 2
+fi
+dist=$(cd "$1" && pwd)
+shift
+root=$(pwd)
+
+fail() {
+  echo "check-dist: $*" >&2
+  exit 1
+}
+
+wheels=$(find "$dist" -maxdepth 1 -name '*.whl' | wc -l | tr -d ' ')
+sdists=$(find "$dist" -maxdepth 1 -name '*.tar.gz' | wc -l | tr -d ' ')
+[ "$wheels" = 1 ] || fail "expected one wheel in $dist, found $wheels"
+[ "$sdists" = 1 ] || fail "expected one sdist in $dist, found $sdists"
+wheel=$(find "$dist" -maxdepth 1 -name '*.whl')
+sdist=$(find "$dist" -maxdepth 1 -name '*.tar.gz')
+
+python -m twine check --strict "$wheel" "$sdist"
+
+# The version the distributions carry, from the wheel's file name (name-version-tags.whl).
+version=$(basename "$wheel" | cut -d- -f2)
+[ "$(basename "$sdist")" = "wesley_python-$version.tar.gz" ] || fail "sdist $(basename "$sdist") is not version $version"
+
+wheel_files=$(python -m zipfile -l "$wheel" | awk 'NR > 1 { print $1 }')
+sdist_files=$(tar tzf "$sdist")
+echo "wheel contents:"
+echo "$wheel_files"
+echo "sdist contents:"
+echo "$sdist_files"
+for path in "wesley_python-$version.dist-info/licenses/LICENSE" "wesley_python-$version.dist-info/licenses/NOTICE" wesley_python/py.typed; do
+  echo "$wheel_files" | grep -Fqx "$path" || fail "the wheel lacks $path"
+done
+for path in LICENSE NOTICE src/wesley_python/py.typed; do
+  echo "$sdist_files" | grep -Fqx "wesley_python-$version/$path" || fail "the sdist lacks $path"
+done
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+for python_version in "$@"; do
+  venv="$work/venv-$python_version"
+  uv venv --quiet --python "$python_version" --seed "$venv"
+  "$venv/bin/python" -m pip install --quiet --no-deps --no-index "$wheel"
+  # Run outside the checkout, so nothing is imported from the source tree.
+  (
+    cd "$work"
+    "$venv/bin/python" -m wesley_python emit --help >/dev/null
+    "$venv/bin/wesley-python" emit --help >/dev/null
+    "$venv/bin/python" -m wesley_python emit --ir "$root/tests/fixtures/hello.ir.json" | cmp - "$root/tests/golden/emit_hello.py"
+    installed=$("$venv/bin/python" -c 'import wesley_python, wesley_python.emit, wesley_python.syntax, wesley_python.types; print(wesley_python.__version__)')
+    [ "$installed" = "$version" ] || fail "Python $python_version imported version $installed, expected $version"
+    location=$("$venv/bin/python" -c 'import wesley_python; print(wesley_python.__file__)')
+    case "$location" in
+      "$venv"/*) ;;
+      *) fail "Python $python_version imported wesley_python from $location, not the fresh environment" ;;
+    esac
+  )
+  echo "check-dist: wesley-python $version installs and runs on Python $python_version"
+done

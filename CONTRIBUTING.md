@@ -17,3 +17,7 @@ Every pull request names a GitHub issue. If there is no issue for the change, op
 ## Licensing
 
 By contributing you agree that your contribution is licensed under the Apache License 2.0, as the rest of the repository is.
+
+## Releasing
+
+Releases are cut from annotated tags on `main` by the release workflow; [RELEASING.md](RELEASING.md) describes the procedure. A pull request that changes the version also changes `__version__` and the changelog, as the tests require.

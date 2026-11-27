@@ -1,23 +1,41 @@
 [build-system]
-requires = ["setuptools>=61"]
+# 77 is the first setuptools with SPDX `license` expressions and `license-files` (PEP 639).
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wesley-python"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "A generic Wesley target that emits standard-library Python TypedDicts from Wesley IR."
-readme = "README.md"
-license = { text = "Apache-2.0" }
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "flyingrobots" }]
+maintainers = [{ name = "flyingrobots" }]
 requires-python = ">=3.9"
 dependencies = []
+keywords = ["wesley", "graphql", "typeddict", "codegen", "code-generation", "typing"]
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
     "Typing :: Typed",
 ]
 
 [project.urls]
+Homepage = "https://github.com/flyingrobots/wesley-python"
 Repository = "https://github.com/flyingrobots/wesley-python"
+Changelog = "https://github.com/flyingrobots/wesley-python/blob/main/CHANGELOG.md"
+Issues = "https://github.com/flyingrobots/wesley-python/issues"
 
 [project.scripts]
 wesley-python = "wesley_python.cli:main"
@@ -66,7 +84,7 @@ ignore = [
 [tool.mypy]
 strict = true
 python_version = "3.9"
-files = ["src", "tests"]
+files = ["src", "tests", "scripts"]
 exclude = ["^tests/golden/", "^tests/typecheck/"]
 mypy_path = "src"
 warn_unreachable = true
