@@ -80,6 +80,16 @@ def changelog_section(text: str, version: str) -> str:
     return section
 
 
+def published_digests(release: object) -> dict[str, str]:
+    """Return the file name to SHA-256 map from a PyPI JSON API answer for one version."""
+    raise NotImplementedError(release)
+
+
+def files_to_upload(built: dict[str, str], published: dict[str, str]) -> list[str]:
+    """Return the built files PyPI does not have yet, refusing any file whose digest differs."""
+    raise NotImplementedError(built, published)
+
+
 def project_version(pyproject: Path) -> str:
     """Return ``project.version`` from a ``pyproject.toml``."""
     with pyproject.open("rb") as file:

@@ -4,6 +4,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -105,6 +109,86 @@ class CheckTagTest(unittest.TestCase):
 
     def test_the_command_line_refuses_a_malformed_tag(self) -> None:
         self.assertEqual(release.main(["check", "main"]), 1)
+
+
+WHEEL = "wesley_python-0.1.0a1-py3-none-any.whl"
+SDIST = "wesley_python-0.1.0a1.tar.gz"
+BUILT = {WHEEL: "a" * 64, SDIST: "b" * 64}
+
+
+class FilesToUploadTest(unittest.TestCase):
+    def test_a_version_pypi_lacks_uploads_every_file(self) -> None:
+        self.assertEqual(release.files_to_upload(BUILT, {}), [WHEEL, SDIST])
+
+    def test_every_file_present_with_its_digest_uploads_nothing(self) -> None:
+        self.assertEqual(release.files_to_upload(BUILT, dict(BUILT)), [])
+
+    def test_a_partial_upload_is_completed_with_the_missing_file(self) -> None:
+        self.assertEqual(release.files_to_upload(BUILT, {WHEEL: BUILT[WHEEL]}), [SDIST])
+
+    def test_refuses_a_published_file_whose_digest_differs(self) -> None:
+        with self.assertRaisesRegex(ValueError, WHEEL.replace(".", r"\.")):
+            release.files_to_upload(BUILT, {WHEEL: "c" * 64})
+
+    def test_refuses_a_published_file_this_build_did_not_make(self) -> None:
+        other = "wesley_python-0.1.0a1-py39-none-any.whl"
+        with self.assertRaisesRegex(ValueError, other.replace(".", r"\.")):
+            release.files_to_upload(BUILT, {**BUILT, other: "d" * 64})
+
+
+class PublishedDigestsTest(unittest.TestCase):
+    def test_reads_file_names_and_sha256_digests(self) -> None:
+        answer = {
+            "info": {"version": "0.1.0a1"},
+            "urls": [
+                {"filename": WHEEL, "digests": {"md5": "x", "sha256": BUILT[WHEEL]}},
+                {"filename": SDIST, "digests": {"sha256": BUILT[SDIST]}},
+            ],
+        }
+        self.assertEqual(release.published_digests(answer), BUILT)
+
+    def test_refuses_an_answer_without_files(self) -> None:
+        answers: tuple[object, ...] = ({}, {"urls": "nope"}, {"urls": [{"filename": WHEEL}]}, [])
+        for answer in answers:
+            with self.subTest(answer=answer), self.assertRaises(ValueError):
+                release.published_digests(answer)
+
+
+class UploadPlanTest(unittest.TestCase):
+    def _run(self, dist: Path, *answer: Path) -> tuple[int, str]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            status = release.main(["upload-plan", str(dist), *map(str, answer)])
+        return status, out.getvalue()
+
+    def _dist(self, tmp: str) -> Path:
+        dist = Path(tmp) / "dist"
+        dist.mkdir()
+        (dist / WHEEL).write_bytes(b"wheel")
+        (dist / SDIST).write_bytes(b"sdist")
+        return dist
+
+    def _answer(self, tmp: str, digests: dict[str, str]) -> Path:
+        path = Path(tmp) / "release.json"
+        urls = [{"filename": name, "digests": {"sha256": digest}} for name, digest in digests.items()]
+        path.write_text(json.dumps({"urls": urls}), encoding="utf-8")
+        return path
+
+    def test_without_an_answer_every_built_file_is_listed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._run(self._dist(tmp)), (0, f"{WHEEL}\n{SDIST}\n"))
+
+    def test_lists_only_the_file_pypi_lacks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = self._dist(tmp)
+            answer = self._answer(tmp, {WHEEL: hashlib.sha256(b"wheel").hexdigest()})
+            self.assertEqual(self._run(dist, answer), (0, f"{SDIST}\n"))
+
+    def test_fails_on_a_digest_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = self._dist(tmp)
+            answer = self._answer(tmp, {WHEEL: hashlib.sha256(b"other").hexdigest()})
+            self.assertEqual(self._run(dist, answer), (1, ""))
 
 
 if __name__ == "__main__":
