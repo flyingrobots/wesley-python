@@ -129,33 +129,50 @@ jobs:
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: audit
-      - name: Skip a version PyPI already has
-        id: pypi
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Choose the files PyPI does not have yet
+        id: plan
         env:
           VERSION: ${{ needs.gate.outputs.version }}
         run: |
-          status=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/wesley-python/${VERSION}/json")
+          # Decided per file, so a partial upload (one file published, the other not) is completed by
+          # "Re-run failed jobs". A file PyPI has with another SHA-256, or one this build did not make,
+          # stops the release: PyPI never replaces a file. scripts/release.py upload-plan decides.
+          answer="$RUNNER_TEMP/release.json"
+          status=$(curl -s -o "$answer" -w '%{http_code}' "https://pypi.org/pypi/wesley-python/${VERSION}/json")
           case "$status" in
-            200)
-              echo "::notice::wesley-python ${VERSION} is already on PyPI; not publishing it again"
-              echo "exists=true" >> "$GITHUB_OUTPUT"
-              ;;
-            404) echo "exists=false" >> "$GITHUB_OUTPUT" ;;
+            200) set -- "$answer" ;;
+            404) set -- ;;
             *)
               echo "::error::PyPI answered HTTP $status for wesley-python ${VERSION}"
               exit 1
               ;;
           esac
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: steps.pypi.outputs.exists == 'false'
-        with:
-          name: dist
-          path: dist/
+          uv run --no-project --python 3.13 python scripts/release.py upload-plan dist "$@" > "$RUNNER_TEMP/upload.txt"
+          mkdir upload
+          while IFS= read -r name; do
+            cp -- "dist/$name" upload/
+          done < "$RUNNER_TEMP/upload.txt"
+          count=$(wc -l < "$RUNNER_TEMP/upload.txt" | tr -d ' ')
+          if [ "$count" = 0 ]; then
+            echo "::notice::PyPI already has every file of wesley-python ${VERSION}, with the same digests; nothing to upload"
+          else
+            echo "Uploading $count file(s):"
+            cat "$RUNNER_TEMP/upload.txt"
+          fi
+          echo "count=$count" >> "$GITHUB_OUTPUT"
       - name: Publish by trusted publishing
-        if: steps.pypi.outputs.exists == 'false'
+        if: steps.plan.outputs.count != '0'
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
-          packages-dir: dist/
+          packages-dir: upload/
 
   verify:
     name: Verify the published version installs
